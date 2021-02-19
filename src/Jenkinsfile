@@ -1,0 +1,64 @@
+node('build-server') {
+  stage('Checkout') {
+
+    cleanWs()
+    checkout scm
+  }
+  stage('Test') {
+    dir('src') {
+        sh """
+        docker system prune -f
+        make docker-test || true
+        """
+    }
+
+  }
+  stage('Test Reports') {
+    junit 'src/reports/**/*.xml'
+    cobertura coberturaReportFile: 'src/reports/coverage.xml', enableNewApi: true, lineCoverageTargets: '0, 0, 0'
+    def summary = junit testResults: 'src/reports/**/*.xml'
+    slackSend botUser: true, 
+      channel: '#builds', 
+      color: '#00ff00', 
+       message: "done ${env.JOB_NAME} ${env.BUILD_NUMBER} (<${env.BUILD_URL}|Open>)\n *Test Summary* - ${summary.totalCount}, Failures: ${summary.failCount}, Skipped: ${summary.skipCount}, Passed: ${summary.passCount}",
+      tokenCredentialId: 'slack-token'
+  }
+
+  stage('Bake') {
+    if (env.BRANCH_NAME == "primary" || env.BRANCH_NAME == "develop") {
+        
+        dir('src') {
+        
+        sh """
+        docker build  --network=host -t rc-search:${env.BUILD_ID} .
+        docker tag rc-search:${env.BUILD_ID} 464485551753.dkr.ecr.us-east-1.amazonaws.com/${env.BRANCH_NAME}/rc-search:${env.BUILD_ID}
+        docker tag rc-search:${env.BUILD_ID} 464485551753.dkr.ecr.us-east-1.amazonaws.com/${env.BRANCH_NAME}/rc-search:latest
+        pip install awscli
+        """
+        
+        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'alpha-aws']]) {
+          sh '$(aws ecr get-login --no-include-email --region us-east-1)'
+          sh """
+          docker push 464485551753.dkr.ecr.us-east-1.amazonaws.com/${env.BRANCH_NAME}/rc-search:${env.BUILD_ID}
+          """
+          }
+
+        if (env.BRANCH_NAME == "develop") {
+        withCredentials([kubeconfigContent(credentialsId: 'k8s-central-dev', variable: 'KUBECONFIG_CONTENT')]) {
+          sh 'mkdir ~/.kube | true'
+          sh '''echo "$KUBECONFIG_CONTENT" > ~/.kube/config '''
+          sh """sed -i 's/rc-search:latest/rc-search:${env.BUILD_ID}/g' ../deployment/deployment.yaml """
+          sh 'kubectl apply -f ../deployment/deployment.yaml'
+        }
+        slackSend botUser: true,
+        channel: '#central-dev-deployment',
+        color: '#00ff00',
+        message: "${env.JOB_NAME} Build ${env.BUILD_NUMBER} Deployed to Central Dev.",
+        tokenCredentialId: 'slack-token'
+        }  
+
+
+        }
+    }
+  }
+}

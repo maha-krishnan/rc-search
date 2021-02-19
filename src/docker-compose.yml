@@ -1,0 +1,41 @@
+version: '3.2'
+services:
+  dynamo-db:
+    container_name: dynamodb
+    image: instructure/dynamo-local-admin
+    ports:
+      - "6000:8000"
+      - "6001:8001"
+      - "6002:8002"
+  redis:
+    image: redis:3
+    ports:
+      - "7000:7000"
+      - "6379:6379"
+    volumes:
+      - ./docker-data/redis-cluster1.tmpl:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+  kafka:
+    image: wurstmeister/kafka:latest
+    ports:
+      - target: 9094
+        published: 9094
+        protocol: tcp
+        mode: host
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://localhost:9094
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+      RC_SEARCH_MODE: "TEST"
+      POLICY_SET_URL: "http://policy-sets-svc.policy-sets.svc.cluster.local:5448"
+      RECORDER_URL: "http://recorder-svc.recorder.svc.cluster.local:5449"
+      ELASTICSEARCH_SERVER: "https://search-dev-cent-02-log-dwvmsu45vbyectppqj5cfjrlv4.us-east-1.es.amazonaws.com"
+      DYNAMODB_URL: http://dynamodb:8000
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"

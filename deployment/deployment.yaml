@@ -1,0 +1,95 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rc-search-cm
+  namespace: rc-search
+data:
+  ALERT_KAFKA_BOOTSTRAP_SERVER: "kafka.default.svc.cluster.local:9092"
+  KAFKA_BOOTSTRAP_SERVER: "kafka.default.svc.cluster.local:9092"
+  KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+  EVENTS_KAFKA_BOOTSTRAP_SERVER: "kafka.default.svc.cluster.local:9092"
+  NOTIFICATION_KAFKA_BOOTSTRAP_SERVER: "kafka.default.svc.cluster.local:9092"
+  NIGHTHAWK_KAFKA_BOOTSTRAP_SERVER: "kafka.default.svc.cluster.local:9092"
+  SEARCH_KAFKA_BOOTSTRAP_ENV: "kafka.default.svc.cluster.local:9092"
+  POLICY_SET_URL: "http://policy-sets-svc.policy-sets.svc.cluster.local:5448/"
+  ELASTICSEARCH_SERVER: "https://search-dev-cent-02-log-dwvmsu45vbyectppqj5cfjrlv4.us-east-1.es.amazonaws.com"
+  DYNAMODB_URL: http://dynamodb:8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rc-search
+  namespace: rc-search
+  labels:
+    app: rc-search
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rc-search
+  minReadySeconds: 10
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: rc-search
+    spec:
+      containers:
+      - name: rc-search-listener
+        image: 464485551753.dkr.ecr.us-east-1.amazonaws.com/develop/rc-search:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "200Mi"
+            cpu: "250m"
+          limits:
+            memory: "500Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 5622
+        envFrom:
+        - configMapRef:
+            name: rc-search-cm
+        - secretRef:
+            name: rc-search-secret
+        command: ["make", "run"]
+      - name: rc-search-api
+        image: 464485551753.dkr.ecr.us-east-1.amazonaws.com/develop/rc-search:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "200Mi"
+            cpu: "250m"
+          limits:
+            memory: "500Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 5623
+        envFrom:
+        - configMapRef:
+            name: rc-search-cm
+        - secretRef:
+            name: rc-search-secret
+        command: ["rc_search", "start-server"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rc-search-svc
+  namespace: rc-search
+  labels:
+    app: rc-search
+spec:
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      name: http
+      port: 5623
+      targetPort: 5623
+  selector:
+    app: rc-search
