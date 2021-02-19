@@ -1,0 +1,20 @@
+version: '3.7'
+services:
+  kafka:
+    image: wurstmeister/kafka:latest
+    environment:
+      HOSTNAME_COMMAND: "docker info | grep ^Name: | cut -d' ' -f 2"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://:9092,OUTSIDE://localhost:9094
+      KAFKA_LISTENERS: INSIDE://:9092,OUTSIDE://:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+      RC_SEARCH_MODE : "TEST"
+      POLICY_SET_URL: "http://policy-sets-svc.policy-sets.svc.cluster.local:5448"
+      RECORDER_URL: "http://recorder-svc.recorder.svc.cluster.local:5449"
+  zookeeper:
+    image: wurstmeister/zookeeper
+    links:
+    - kafka
+    - zookeeper

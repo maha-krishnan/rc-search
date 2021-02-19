@@ -1,0 +1,20 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/preserve-host: "true"
+    traefik.ingress.kubernetes.io/request-modifier: "ReplacePathRegex:/apis/rc-search/(.*) /external/$1"
+  name: rc-search-ingress
+  namespace: rc-search
+spec:
+  rules:
+  - host: '*.rightrev.cloud'
+    http:
+      paths:
+      - backend:
+          serviceName: rc-search-svc
+          servicePort: 5623
+        path: /apis/rc-search
+status:
+  loadBalancer: {}
